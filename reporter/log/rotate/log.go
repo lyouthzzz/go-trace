@@ -8,6 +8,24 @@ import (
 
 type Option func(*Config)
 
+func MaxSizeOption(maxSize int) Option {
+	return func(conf *Config) {
+		conf.MaxSize = maxSize
+	}
+}
+
+func MaxAgeOption(maxAge int) Option {
+	return func(conf *Config) {
+		conf.MaxAge = maxAge
+	}
+}
+
+func MaxBackupsOption(maxBackups int) Option {
+	return func(conf *Config) {
+		conf.MaxBackups = maxBackups
+	}
+}
+
 type Config struct {
 	Filename   string
 	MaxSize    int
