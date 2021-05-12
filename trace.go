@@ -13,7 +13,7 @@ const (
 	remoteContextKey
 )
 
-var globalTracer Tracer
+var globalTracer Tracer = &tracer{Name: "global"}
 
 var _ Tracer = (*tracer)(nil)
 

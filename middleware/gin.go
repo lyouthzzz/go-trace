@@ -15,6 +15,7 @@ func ServerTracingInterceptor() gin.HandlerFunc {
 		ctx := c.Request.Context()
 
 		carrier := gotrace.HTTPCarrier(c.Request.Header)
+		
 		ctx = propagator.Extract(ctx, carrier)
 		ctx, span := tracer.StartSpan(ctx, c.Request.Method)
 		defer span.End()

@@ -107,7 +107,7 @@ func NewSpan(name string, opts ...SpanOption) Span {
 }
 
 type span struct {
-	lock        sync.RWMutex
+	lock        sync.Mutex
 	tracer      Tracer
 	spanContext SpanContext
 	name        string
@@ -130,8 +130,8 @@ func (s *span) GetSpanContext() SpanContext {
 }
 
 func (s *span) End() {
-	s.lock.Unlock()
-	defer s.lock.Lock()
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
 	if s.ended {
 		return
@@ -143,7 +143,7 @@ func (s *span) End() {
 
 func (s *span) AddError(err error) {
 	s.lock.Lock()
-	defer s.lock.Lock()
+	defer s.lock.Unlock()
 
 	if s.errs == nil {
 		s.errs = make([]error, 0)
@@ -168,7 +168,7 @@ func (s *span) SetAttributes(attrs ...attribute.KeyValue) {
 	}
 
 	if s.attributes == nil {
-		s.attributes = make(map[string]interface{}, 0)
+		s.attributes = make(map[string]interface{})
 	}
 
 	for _, attr := range attrs {
@@ -201,23 +201,7 @@ func (s *span) Follow(name string) Span {
 func (s *span) childId() string {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
 	s.children++
 	return fmt.Sprintf("%s.%d", s.GetSpanContext().GetRpcId(), s.children)
 }
-
-// func NewServerSpan(carrier Carrier, operationName string) Span {
-// 	globalTicketId := carrier.Get(globlaTicketIdKey)
-// 	monitorId := carrier.Get(monitorIdKey)
-// 	parentId := carrier.Get(rpcIdKey)
-// 	rpcId := carrier.Get(childRpcIdKey)
-
-// 	span := NewSpan(operationName)
-
-// 	span.SetAttributes(attribute.GlobalTicketId(globalTicketId),
-// 		attribute.MonitorId(monitorId),
-// 		attribute.ParentRpcId(parentId),
-// 		attribute.RpcId(rpcId),
-// 	)
-
-// 	return span
-// }

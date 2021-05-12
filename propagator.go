@@ -2,13 +2,15 @@ package gotrace
 
 import (
 	"context"
+
+	"github.com/lyouthzzz/go-trace/snowflake"
 )
 
 const (
-	globlaTicketIdKey = "X-Global-Ticket-ID"
-	monitorIdKey      = "X-Monitor-ID"
-	rpcIdKey          = "X-RPC-ID"
-	childRpcIdKey     = "X-Child-RPC-ID"
+	GloblaTicketIdKey = "X-Global-Ticket-ID"
+	MonitorIdKey      = "X-Monitor-ID"
+	RpcIdKey          = "X-RPC-ID"
+	ChildRpcIdKey     = "X-Child-RPC-ID"
 )
 
 type Progagator interface {
@@ -25,9 +27,19 @@ var (
 )
 
 func (h propagator) Extract(ctx context.Context, carrier Carrier) context.Context {
-	gid := carrier.Get(globlaTicketIdKey)
-	rid := carrier.Get(rpcIdKey)
-	cid := carrier.Get(childRpcIdKey)
+	gid := carrier.Get(GloblaTicketIdKey)
+	rid := carrier.Get(RpcIdKey)
+	cid := carrier.Get(ChildRpcIdKey)
+	if gid == "" {
+		id, _ := snowflake.GenerateID()
+		gid = id.String()
+	}
+	if rid == "" {
+		rid = "0.1"
+	}
+	if cid == "" {
+		cid = rid + ".1"
+	}
 
 	sc := SpanContext{
 		globalTicketId: gid,
@@ -42,9 +54,9 @@ func (h propagator) Extract(ctx context.Context, carrier Carrier) context.Contex
 func (h propagator) Inject(ctx context.Context, carrier Carrier) {
 	sc := SpanContextFromContext(ctx)
 
-	carrier.Set(globlaTicketIdKey, sc.globalTicketId)
-	carrier.Set(rpcIdKey, sc.parentRpcId)
-	carrier.Set(childRpcIdKey, sc.rpcId)
+	carrier.Set(GloblaTicketIdKey, sc.globalTicketId)
+	carrier.Set(RpcIdKey, sc.parentRpcId)
+	carrier.Set(ChildRpcIdKey, sc.rpcId)
 }
 
 func GetPropagator() Progagator {
