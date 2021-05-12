@@ -3,6 +3,7 @@ package gotrace
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/lyouthzzz/go-trace/snowflake"
 )
 
@@ -31,8 +32,7 @@ func (h propagator) Extract(ctx context.Context, carrier Carrier) context.Contex
 	rid := carrier.Get(RpcIdKey)
 	cid := carrier.Get(ChildRpcIdKey)
 	if gid == "" {
-		id, _ := snowflake.GenerateID()
-		gid = id.String()
+		gid = snowflake.NewID().String()
 	}
 	if rid == "" {
 		rid = "0.1"
@@ -45,7 +45,7 @@ func (h propagator) Extract(ctx context.Context, carrier Carrier) context.Contex
 		globalTicketId: gid,
 		parentRpcId:    rid,
 		rpcId:          cid,
-		monitorId:      "monitorUUID",
+		monitorId:      uuid.New().String(),
 	}
 	ctx = ContextWithRemoteSpanContext(ctx, sc)
 	return ctx

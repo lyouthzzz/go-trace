@@ -2,8 +2,6 @@ package gotrace
 
 import (
 	"context"
-
-	"github.com/lyouthzzz/go-trace/reporter/kafka"
 )
 
 type traceKeyType int
@@ -13,7 +11,7 @@ const (
 	remoteContextKey
 )
 
-var globalTracer Tracer = &tracer{Name: "global"}
+var globalTracer Tracer
 
 var _ Tracer = (*tracer)(nil)
 
@@ -21,13 +19,13 @@ type Tracer interface {
 	StartSpan(ctx context.Context, name string, opts ...SpanOption) (context.Context, Span)
 }
 
-type Config struct {
-	Reporter *kafka.Reporter
+type tracer struct {
+	name     string
+	reporter Reporter
 }
 
-type tracer struct {
-	Name   string
-	Config *Config
+func NewTracer(name string, reporter Reporter) Tracer {
+	return &tracer{name: name, reporter: reporter}
 }
 
 func (t *tracer) StartSpan(ctx context.Context, name string, opts ...SpanOption) (context.Context, Span) {
@@ -69,12 +67,12 @@ func SpanContextFromContext(ctx context.Context) SpanContext {
 	return SpanContext{}
 }
 
-func StartSpan(ctx context.Context, name string) (context.Context, Span) {
-	return StratSpanWithTracer(ctx, globalTracer, name)
+func StartSpan(ctx context.Context, name string, opts ...SpanOption) (context.Context, Span) {
+	return StratSpanWithTracer(ctx, globalTracer, name, opts...)
 }
 
-func StratSpanWithTracer(ctx context.Context, tracer Tracer, name string) (context.Context, Span) {
-	return globalTracer.StartSpan(ctx, name)
+func StratSpanWithTracer(ctx context.Context, tracer Tracer, name string, opts ...SpanOption) (context.Context, Span) {
+	return globalTracer.StartSpan(ctx, name, opts...)
 }
 
 func SetGlobalTracer(tracer Tracer) {

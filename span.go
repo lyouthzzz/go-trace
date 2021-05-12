@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lyouthzzz/go-trace/attribute"
 )
 
@@ -12,16 +13,20 @@ import (
 type SpanKind string
 
 const (
-	SpanKindProvider SpanKind = "PROVIDER"
-	SpanKindConsumer SpanKind = "CUNSUMER"
+	SpanKindProvider SpanKind = "provider"
+	SpanKindConsumer SpanKind = "consumer"
 )
 
+func (kind SpanKind) String() string {
+	return string(kind)
+}
+
 // ====SpanStatus====
-type SpanStatus string
+type SpanStatus int
 
 const (
-	SpanStatusSuccess SpanStatus = "SUCCESS"
-	SpanStatusFail    SpanStatus = "FAIL"
+	SpanStatusSuccess SpanStatus = 1
+	SpanStatusFail    SpanStatus = 0
 )
 
 // ====SpanContext====
@@ -55,27 +60,29 @@ func (c SpanContext) IsValid() bool {
 }
 
 // ====SpanOption====
-type SpanOption func(*span)
+type SpanOption func(*SpanModel)
 
 func SpanKindOption(kind SpanKind) SpanOption {
-	return func(s *span) {
-		s.kind = kind
+	return func(s *SpanModel) {
+		s.Kind = kind
 	}
 }
 
-func SpanTracerOption(tracer Tracer) SpanOption {
-	return func(s *span) {
-		s.tracer = tracer
+func SpanTracerOption(t Tracer) SpanOption {
+	return func(s *SpanModel) {
+		if tracer, ok := t.(*tracer); ok {
+			s.tracer = tracer
+		}
 	}
 }
 
 func SpanContextOption(sc SpanContext) SpanOption {
-	return func(s *span) {
-		s.spanContext = sc
+	return func(s *SpanModel) {
+		s.SpanContext = sc
 	}
 }
 
-var _ Span = (*span)(nil)
+var _ Span = (*SpanModel)(nil)
 
 type Span interface {
 	// 获取 Tracer
@@ -99,37 +106,37 @@ type Span interface {
 }
 
 func NewSpan(name string, opts ...SpanOption) Span {
-	s := &span{name: name, startTime: time.Now()}
+	s := &SpanModel{Name: name, StartTime: time.Now()}
 	for _, opt := range opts {
 		opt(s)
 	}
 	return s
 }
 
-type span struct {
+type SpanModel struct {
 	lock        sync.Mutex
-	tracer      Tracer
-	spanContext SpanContext
-	name        string
-	kind        SpanKind
-	status      SpanStatus
-	errs        []error
+	tracer      *tracer
+	SpanContext SpanContext
+	Name        string
+	Kind        SpanKind
+	Status      SpanStatus
+	Errs        []error
+	StartTime   time.Time
+	Duration    time.Duration
+	Attributes  map[string]interface{}
 	ended       bool
-	startTime   time.Time
-	duration    time.Duration
-	attributes  map[string]interface{}
 	children    int
 }
 
-func (s *span) Tracer() Tracer {
+func (s *SpanModel) Tracer() Tracer {
 	return s.tracer
 }
 
-func (s *span) GetSpanContext() SpanContext {
-	return s.spanContext
+func (s *SpanModel) GetSpanContext() SpanContext {
+	return s.SpanContext
 }
 
-func (s *span) End() {
+func (s *SpanModel) End() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -137,29 +144,33 @@ func (s *span) End() {
 		return
 	}
 
-	s.duration = time.Since(s.startTime)
+	s.Duration = time.Since(s.StartTime)
+
+	if s.tracer.reporter != nil {
+		s.tracer.reporter.Send(s)
+	}
 	s.ended = true
 }
 
-func (s *span) AddError(err error) {
+func (s *SpanModel) AddError(err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if s.errs == nil {
-		s.errs = make([]error, 0)
+	if s.Errs == nil {
+		s.Errs = make([]error, 0)
 	}
-	s.errs = append(s.errs, err)
+	s.Errs = append(s.Errs, err)
 }
 
-func (s *span) SetName(name string) {
-	s.name = name
+func (s *SpanModel) SetName(name string) {
+	s.Name = name
 }
 
-func (s *span) SetStatus(status SpanStatus) {
-	s.status = status
+func (s *SpanModel) SetStatus(status SpanStatus) {
+	s.Status = status
 }
 
-func (s *span) SetAttributes(attrs ...attribute.KeyValue) {
+func (s *SpanModel) SetAttributes(attrs ...attribute.KeyValue) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -167,17 +178,17 @@ func (s *span) SetAttributes(attrs ...attribute.KeyValue) {
 		return
 	}
 
-	if s.attributes == nil {
-		s.attributes = make(map[string]interface{})
+	if s.Attributes == nil {
+		s.Attributes = make(map[string]interface{})
 	}
 
 	for _, attr := range attrs {
-		s.attributes[attr.Key] = attr.Value
+		s.Attributes[attr.Key] = attr.Value
 	}
 }
 
-func (s *span) Child(name string) Span {
-	cs := &span{name: name}
+func (s *SpanModel) Child(name string) Span {
+	cs := &SpanModel{Name: name}
 	csc := SpanContext{}
 
 	sc := s.GetSpanContext()
@@ -189,16 +200,17 @@ func (s *span) Child(name string) Span {
 		csc.parentRpcId = sc.rpcId
 		csc.rpcId = s.childId()
 	}
-	csc.monitorId = "monitorUUID"
+
+	csc.monitorId = uuid.New().String()
 
 	return cs
 }
 
-func (s *span) Follow(name string) Span {
-	return &span{}
+func (s *SpanModel) Follow(name string) Span {
+	return &SpanModel{}
 }
 
-func (s *span) childId() string {
+func (s *SpanModel) childId() string {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 

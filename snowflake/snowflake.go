@@ -15,6 +15,17 @@ func GenerateID() (ID, error) {
 	return node.NextId()
 }
 
+func NewID() ID {
+	return Must(node.NextId())
+}
+
+func Must(id ID, err error) ID {
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 type ID int64
 
 type Node struct {

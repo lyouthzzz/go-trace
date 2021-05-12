@@ -2,6 +2,7 @@ package log
 
 import (
 	"io"
+	"os"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -29,4 +30,8 @@ func NewMultiWriter(level Level, writers ...io.Writer) *zap.Logger {
 	core := zapcore.NewCore(zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()), mws, level)
 
 	return zap.New(core)
+}
+
+func NewStdoutLogger(level Level) *zap.Logger {
+	return NewMultiWriter(level, os.Stdout)
 }
