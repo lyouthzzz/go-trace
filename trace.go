@@ -31,7 +31,7 @@ func NewTracer(name string, reporter Reporter) Tracer {
 func (t *tracer) StartSpan(ctx context.Context, name string, opts ...SpanOption) (context.Context, Span) {
 	var s Span
 	if parentSpan := SpanFromContext(ctx); parentSpan != nil {
-		s = parentSpan.Child(name)
+		s = parentSpan.Child(name, opts...)
 	} else {
 		opts = append(opts, SpanTracerOption(t))
 		opts = append(opts, SpanContextOption(RemoteSpanContextFromContext(ctx)))

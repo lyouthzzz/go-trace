@@ -37,6 +37,7 @@ type SpanContext struct {
 	monitorId      string
 	parentRpcId    string
 	rpcId          string
+	rpcIndex       string
 }
 
 func (c SpanContext) GetGlobalTicketId() string {
@@ -55,8 +56,12 @@ func (c SpanContext) GetRpcId() string {
 	return c.rpcId
 }
 
+func (c SpanContext) GetRpcIndex() string {
+	return c.rpcIndex
+}
+
 func (c SpanContext) IsValid() bool {
-	return c.globalTicketId != ""
+	return c.globalTicketId != "" && c.monitorId != ""
 }
 
 // ====SpanOption====
@@ -95,18 +100,18 @@ type Span interface {
 	AddError(error)
 	// 设置name
 	SetName(string)
-	// 设置span状态
+	// 设置span状态  默认SUCCESS
 	SetStatus(SpanStatus)
 	// 设置属性信息
 	SetAttributes(attrs ...attribute.KeyValue)
 	// child节点
-	Child(name string) Span
+	Child(name string, opts ...SpanOption) Span
 	// follow节点
-	Follow(name string) Span
+	Follow(name string, opts ...SpanOption) Span
 }
 
 func NewSpan(name string, opts ...SpanOption) Span {
-	s := &SpanModel{Name: name, StartTime: time.Now()}
+	s := &SpanModel{Name: name, StartTime: time.Now(), Status: SpanStatusSuccess}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -187,33 +192,36 @@ func (s *SpanModel) SetAttributes(attrs ...attribute.KeyValue) {
 	}
 }
 
-func (s *SpanModel) Child(name string) Span {
-	cs := &SpanModel{Name: name}
+func (s *SpanModel) Child(name string, opts ...SpanOption) Span {
+	cs := &SpanModel{tracer: s.tracer, Name: name, StartTime: time.Now(), Status: SpanStatusSuccess}
 	csc := SpanContext{}
 
 	sc := s.GetSpanContext()
-
 	if sc.globalTicketId != "" {
 		csc.globalTicketId = sc.globalTicketId
 	}
-	if sc.rpcId != "" {
-		csc.parentRpcId = sc.rpcId
-		csc.rpcId = s.childId()
-	}
 
+	csc.parentRpcId = sc.rpcId
+	csc.rpcIndex = s.childIndex()
+	csc.rpcId = csc.parentRpcId + "." + csc.rpcIndex
 	csc.monitorId = uuid.New().String()
 
+	cs.SpanContext = csc
+
+	for _, opt := range opts {
+		opt(cs)
+	}
 	return cs
 }
 
-func (s *SpanModel) Follow(name string) Span {
+func (s *SpanModel) Follow(name string, opts ...SpanOption) Span {
 	return &SpanModel{}
 }
 
-func (s *SpanModel) childId() string {
+func (s *SpanModel) childIndex() string {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	s.children++
-	return fmt.Sprintf("%s.%d", s.GetSpanContext().GetRpcId(), s.children)
+	return fmt.Sprintf("%d", s.children)
 }

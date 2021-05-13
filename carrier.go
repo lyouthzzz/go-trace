@@ -1,12 +1,9 @@
 package gotrace
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 )
-
-var ErrInvalidCarrier = errors.New("invalid carrier")
 
 type (
 	Carrier interface {

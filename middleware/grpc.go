@@ -4,6 +4,7 @@ import (
 	"context"
 
 	gotrace "github.com/lyouthzzz/go-trace"
+	"github.com/lyouthzzz/go-trace/attribute"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -21,12 +22,21 @@ func ClientTracingInterceptor() grpc.UnaryClientInterceptor {
 		carrier := gotrace.GRPCCarrier(md)
 		ctx = metadata.NewOutgoingContext(ctx, md)
 
-		ctx, span := tracer.StartSpan(ctx, method)
+		ctx, span := tracer.StartSpan(ctx, method,
+			gotrace.SpanKindOption(gotrace.SpanKindConsumer),
+			gotrace.SpanTracerOption(tracer))
+		span.SetAttributes(attribute.RpcType("GRPC"))
+		span.SetAttributes(attribute.KV("method", method))
 		defer span.End()
 
 		propagator.Inject(ctx, carrier)
 
-		return invoker(ctx, method, req, reply, cc, opts...)
+		err := invoker(ctx, method, req, reply, cc, opts...)
+		if err != nil {
+			span.SetStatus(gotrace.SpanStatusFail)
+			span.AddError(err)
+		}
+		return err
 	}
 }
 
@@ -46,11 +56,15 @@ func ServerUnaryTracingInterceptor() grpc.UnaryServerInterceptor {
 		}
 		ctx = propagator.Extract(ctx, carrier)
 
-		ctx, span := tracer.StartSpan(ctx, info.FullMethod)
+		ctx, span := tracer.StartSpan(ctx, info.FullMethod,
+			gotrace.SpanKindOption(gotrace.SpanKindProvider),
+			gotrace.SpanTracerOption(tracer))
+		span.SetAttributes(attribute.RpcType("GRPC"))
 		defer span.End()
 
 		reply, err := handler(ctx, req)
 		if err != nil {
+			span.SetStatus(gotrace.SpanStatusFail)
 			span.AddError(err)
 		}
 		return reply, err

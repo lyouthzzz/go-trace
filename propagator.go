@@ -4,14 +4,14 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/lyouthzzz/go-trace/snowflake"
 )
 
 const (
-	GloblaTicketIdKey = "X-Global-Ticket-ID"
-	MonitorIdKey      = "X-Monitor-ID"
-	RpcIdKey          = "X-RPC-ID"
-	ChildRpcIdKey     = "X-Child-RPC-ID"
+	GloblaTicketIdKey = "globalTicket"
+	ParentRpcId       = "parentRpcId"
+	RpcEntryUrl       = "rpcEntryUrl"
+	RpcIndex          = "rpcIndex"
+	RpcId             = "rpcId"
 )
 
 type Progagator interface {
@@ -29,22 +29,27 @@ var (
 
 func (h propagator) Extract(ctx context.Context, carrier Carrier) context.Context {
 	gid := carrier.Get(GloblaTicketIdKey)
-	rid := carrier.Get(RpcIdKey)
-	cid := carrier.Get(ChildRpcIdKey)
+	pid := carrier.Get(ParentRpcId)
+	rid := carrier.Get(RpcId)
+	ri := carrier.Get(RpcIndex)
 	if gid == "" {
-		gid = snowflake.NewID().String()
+		gid = uuid.New().String()
+	}
+	if pid == "" {
+		pid = "0.1"
+	}
+	if ri == "" {
+		ri = "1"
 	}
 	if rid == "" {
-		rid = "0.1"
-	}
-	if cid == "" {
-		cid = rid + ".1"
+		rid = pid + "." + ri
 	}
 
 	sc := SpanContext{
 		globalTicketId: gid,
-		parentRpcId:    rid,
-		rpcId:          cid,
+		parentRpcId:    pid,
+		rpcIndex:       ri,
+		rpcId:          rid,
 		monitorId:      uuid.New().String(),
 	}
 	ctx = ContextWithRemoteSpanContext(ctx, sc)
@@ -55,8 +60,9 @@ func (h propagator) Inject(ctx context.Context, carrier Carrier) {
 	sc := SpanContextFromContext(ctx)
 
 	carrier.Set(GloblaTicketIdKey, sc.globalTicketId)
-	carrier.Set(RpcIdKey, sc.parentRpcId)
-	carrier.Set(ChildRpcIdKey, sc.rpcId)
+	carrier.Set(ParentRpcId, sc.parentRpcId)
+	carrier.Set(RpcIndex, sc.rpcIndex)
+	carrier.Set(RpcId, sc.rpcId)
 }
 
 func GetPropagator() Progagator {

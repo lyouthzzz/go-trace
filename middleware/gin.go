@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	gotrace "github.com/lyouthzzz/go-trace"
+	"github.com/lyouthzzz/go-trace/attribute"
 )
 
 func ServerTracingInterceptor() gin.HandlerFunc {
@@ -15,16 +16,17 @@ func ServerTracingInterceptor() gin.HandlerFunc {
 		ctx := c.Request.Context()
 
 		carrier := gotrace.HTTPCarrier(c.Request.Header)
-		
-		ctx = propagator.Extract(ctx, carrier)
-		ctx, span := tracer.StartSpan(ctx, c.Request.Method)
-		defer span.End()
 
+		ctx = propagator.Extract(ctx, carrier)
+		ctx, span := tracer.StartSpan(ctx, c.Request.URL.Path, gotrace.SpanKindOption(gotrace.SpanKindProvider))
+		defer span.End()
+		span.SetAttributes(attribute.KV("method", c.Request.URL.Path))
 		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
 
 		if c.Writer.Status() != http.StatusOK {
+			span.SetStatus(gotrace.SpanStatusFail)
 			if c.Errors != nil && len(c.Errors) != 0 {
 				span.AddError(c.Errors[0])
 			}
